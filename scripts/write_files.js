@@ -1,0 +1,2 @@
+// generator
+console.log(" ready);
