@@ -45,6 +45,16 @@ const defaultData: Record<DatabaseTab, any> = {
   schedule_images: initialScheduleImages,
 };
 
+// Bundled persistent data (if user exported data to repository)
+import bundledData from '../data.json';
+if (bundledData && typeof bundledData === 'object') {
+  for (const [key, value] of Object.entries(bundledData)) {
+    if (key in defaultData && value !== undefined && value !== null) {
+      defaultData[key as DatabaseTab] = value;
+    }
+  }
+}
+
 // In-memory cache for ultra-fast, synchronous access across components
 const memoryStore: Partial<Record<DatabaseTab, any>> = {};
 
@@ -173,6 +183,31 @@ export function resetAllData(): void {
   });
 }
 
+// Export all current data (including uploaded images/PDFs in IndexedDB)
+export async function exportAllData(): Promise<Record<DatabaseTab, any>> {
+  const idbData = await idbGetAll();
+  const all: Record<string, any> = {};
+  for (const key of Object.keys(defaultData)) {
+    const tab = key as DatabaseTab;
+    all[tab] = idbData[tab] !== undefined ? idbData[tab] : (memoryStore[tab] !== undefined ? memoryStore[tab] : getStoredData(tab));
+  }
+  return all as Record<DatabaseTab, any>;
+}
+
+// Import full data dump into current storage
+export async function importAllData(data: Record<string, any>): Promise<void> {
+  for (const [key, value] of Object.entries(data)) {
+    if (key in defaultData && value !== undefined && value !== null) {
+      await idbSet(key, value);
+      memoryStore[key as DatabaseTab] = value;
+      try {
+        localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+      } catch (e) {}
+    }
+  }
+  window.dispatchEvent(new Event('nantech_storage_update'));
+}
+
 // Authentication Session Management
 const AUTH_KEY = 'nantech_admin_session';
 
@@ -197,3 +232,4 @@ export function clearAdminSession(): void {
   localStorage.removeItem(AUTH_KEY);
   window.dispatchEvent(new Event('nantech_auth_change'));
 }
+

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getStoredData, resetAllData } from '@/lib/data-store';
+import { getStoredData, resetAllData, exportAllData, importAllData } from '@/lib/data-store';
 import { 
   Building2, 
   Users, 
@@ -171,11 +171,53 @@ export default function AdminDashboard() {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
+            onClick={async () => {
+              try {
+                const data = await exportAllData();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'database-export.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch (err) {
+                alert('เกิดข้อผิดพลาดในการ Export ข้อมูล');
+              }
+            }}
+            className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors shadow-sm"
+          >
+            <FolderGit2 className="w-3.5 h-3.5" />
+            <span>ดาวน์โหลดไฟล์ Data (Export JSON)</span>
+          </button>
+          <label className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors shadow-sm cursor-pointer">
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>นำเข้าข้อมูล (Import JSON)</span>
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const parsed = JSON.parse(text);
+                  await importAllData(parsed);
+                  alert('นำเข้าข้อมูลสำเร็จ!');
+                  refreshData();
+                } catch (err) {
+                  alert('ไฟล์ JSON ไม่ถูกต้อง');
+                }
+              }}
+            />
+          </label>
+          <button
             onClick={handleReset}
             className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors shadow-sm"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>รีเซ็ตข้อมูลทั้งหมด (Defaults)</span>
+            <span>รีเซ็ตค่าเริ่มต้น (Defaults)</span>
           </button>
           <Link
             to="/"
