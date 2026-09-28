@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { getStoredData } from '@/lib/data-store';
-import { TeachingLogItem, WorkPhotoItem, WorkArtifactItem } from '@/lib/types';
+import { TeachingLogItem, WorkPhotoItem, WorkArtifactItem, TermType } from '@/lib/types';
+import TermSwitcher from './TermSwitcher';
 import { formatThaiDate } from '@/lib/utils';
 import { FileText, Camera, FolderGit2, ChevronLeft, ChevronRight, X, Calendar, Layers, CheckCircle2, Images } from 'lucide-react';
 
@@ -28,8 +29,31 @@ export default function TeachingLogPage() {
   const [logs, setLogs] = useState<TeachingLogItem[]>(() => getStoredData<TeachingLogItem[]>('teaching_log') || []);
   const [photos, setPhotos] = useState<WorkPhotoItem[]>(() => getStoredData<WorkPhotoItem[]>('work_photos') || []);
   const [artifacts, setArtifacts] = useState<WorkArtifactItem[]>(() => getStoredData<WorkArtifactItem[]>('work_artifacts') || []);
+  const [term, setTerm] = useState<TermType>('term1');
   const [activeWeek, setActiveWeek] = useState<number>(1);
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
+
+  // Week selector horizontal scroll ref for mouse wheel scrolling
+  const weekScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleWheel = (e: WheelEvent) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      if (weekScrollRef.current) {
+        weekScrollRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
+  const setWeekScrollRef = (node: HTMLDivElement | null) => {
+    if (weekScrollRef.current) {
+      weekScrollRef.current.removeEventListener('wheel', handleWheel);
+    }
+    weekScrollRef.current = node;
+    if (node) {
+      node.addEventListener('wheel', handleWheel, { passive: false });
+    }
+  };
 
   // Work photos gallery controls
   const [isAlbumOpen, setIsAlbumOpen] = useState(false);
@@ -148,28 +172,33 @@ export default function TeachingLogPage() {
     };
   }, []);
 
+  // Filter logs by selected term (defaulting undefined term to 'term1')
+  const termLogs = useMemo(() => {
+    return logs.filter((item) => (item.term || 'term1') === term);
+  }, [logs, term]);
+
   // Map of item counts per week
   const weekCounts = useMemo(() => {
     const counts: Record<number, number> = {};
-    logs.forEach((item) => {
+    termLogs.forEach((item) => {
       const w = Number(item.week || 1);
       counts[w] = (counts[w] || 0) + 1;
     });
     return counts;
-  }, [logs]);
+  }, [termLogs]);
 
   // Weeks that have at least 1 record
   const populatedWeeks = useMemo(() => {
     const set = new Set<number>();
-    logs.forEach((item) => {
+    termLogs.forEach((item) => {
       set.add(Number(item.week || 1));
     });
     return Array.from(set).sort((a, b) => a - b);
-  }, [logs]);
+  }, [termLogs]);
 
   // Filter logs for active week (safe sorting)
   const weekLogs = useMemo(() => {
-    return logs
+    return termLogs
       .filter((item) => Number(item.week || 1) === activeWeek)
       .sort((a, b) => {
         const timeA = parseDateToTime(a.date);
@@ -177,15 +206,15 @@ export default function TeachingLogPage() {
         if (timeA !== 0 && timeB !== 0) return timeA - timeB;
         return (a.date || '').localeCompare(b.date || '');
       });
-  }, [logs, activeWeek]);
+  }, [termLogs, activeWeek]);
 
   // Group all logs by week for "All Weeks" view
   const allWeeksGrouped = useMemo(() => {
     const groups: { week: number; items: TeachingLogItem[]; dateRange: string }[] = [];
-    // Display all 22 weeks or populated weeks
+    // Display all 24 weeks or populated weeks
     const weeksToDisplay = populatedWeeks.length > 0 ? populatedWeeks : [1];
     weeksToDisplay.forEach((w) => {
-      const items = logs
+      const items = termLogs
         .filter((item) => Number(item.week || 1) === w)
         .sort((a, b) => {
           const timeA = parseDateToTime(a.date);
@@ -204,7 +233,7 @@ export default function TeachingLogPage() {
       groups.push({ week: w, items, dateRange: range });
     });
     return groups;
-  }, [logs, populatedWeeks]);
+  }, [termLogs, populatedWeeks]);
 
   // Compute date range for active week
   const dateRangeText = useMemo(() => {
@@ -223,15 +252,26 @@ export default function TeachingLogPage() {
       
       {/* Page Header */}
       <div className="bg-gradient-to-r from-nantech-800 to-nantech-600 rounded-3xl p-8 sm:p-10 text-white shadow-xl relative overflow-hidden">
-        <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-semibold text-emerald-100">
-            <FileText className="w-4 h-4" />
-            <span>บันทึกผลการปฏิบัติงาน 22 สัปดาห์</span>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            {/* <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-semibold text-emerald-100">
+              <FileText className="w-4 h-4" />
+              <span>บันทึกผลการปฏิบัติงาน 24 สัปดาห์</span>
+            </div> */}
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">บันทึกการปฏิบัติงาน & การฝึกสอน</h1>
+            <p className="text-emerald-100 text-sm max-w-2xl">
+              บันทึกการจัดกิจกรรมการเรียนรู้ การปฏิบัติงานประจำวัน และประมวลภาพการปฏิบัติงานในสถานศึกษา ({term === 'term1' ? 'ภาคเรียนที่ 1' : 'ภาคเรียนที่ 2'})
+            </p>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">บันทึกการปฏิบัติงาน & การฝึกสอน</h1>
-          <p className="text-emerald-100 text-sm max-w-2xl">
-            บันทึกการจัดกิจกรรมการเรียนรู้ การปฏิบัติงานประจำวัน และประมวลภาพการปฏิบัติงานในสถานศึกษา
-          </p>
+          <div className="bg-white/10 p-1 rounded-2xl backdrop-blur-sm border border-white/20 shrink-0 self-start md:self-center">
+            <TermSwitcher 
+              currentTerm={term} 
+              onTermChange={(newTerm) => {
+                setTerm(newTerm);
+                setActiveWeek(1);
+              }} 
+            />
+          </div>
         </div>
       </div>
 
@@ -245,7 +285,7 @@ export default function TeachingLogPage() {
             {/* Table Main Title Bar */}
             <div className="text-center py-4 border-b border-slate-200 bg-white">
               <h2 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-wide">
-                บันทึกการฝึกสอน
+                บันทึกการฝึกสอน ({term === 'term1' ? 'ภาคเรียนที่ 1' : 'ภาคเรียนที่ 2'})
               </h2>
             </div>
 
@@ -265,8 +305,11 @@ export default function TeachingLogPage() {
                 <span>{dateRangeText || `สัปดาห์ที่ ${activeWeek}`}</span>
               </div>
             </div>
-            <div className="pt-2 border-t border-slate-100 flex items-center overflow-x-auto no-scrollbar space-x-1.5 py-1">
-                {Array.from({ length: 22 }, (_, i) => i + 1).map((w) => {
+            <div 
+              ref={setWeekScrollRef}
+              className="pt-2 border-t border-slate-100 flex items-center overflow-x-auto no-scrollbar space-x-1.5 py-1"
+            >
+                {Array.from({ length: 24 }, (_, i) => i + 1).map((w) => {
                   const isActive = activeWeek === w && viewMode === 'single';
                   const count = weekCounts[w] || 0;
                   return (
@@ -314,7 +357,7 @@ export default function TeachingLogPage() {
                     <tr>
                       <td colSpan={3} className="py-12 text-center text-slate-400">
                         <FileText className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                        <p className="font-medium text-sm">ไม่มีข้อมูลการปฏิบัติงานในสัปดาห์ที่ {activeWeek}</p>
+                        <p className="font-medium text-sm">ไม่มีข้อมูลการปฏิบัติงานในสัปดาห์ที่ {activeWeek} ({term === 'term1' ? 'ภาคเรียนที่ 1' : 'ภาคเรียนที่ 2'})</p>
                         <p className="text-xs text-slate-400 mt-1">สามารถเพิ่มบันทึกสำหรับสัปดาห์นี้ได้ในระบบจัดการผู้ดูแล (Admin)</p>
                       </td>
                     </tr>

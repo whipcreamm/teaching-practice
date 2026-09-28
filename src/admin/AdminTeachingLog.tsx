@@ -1,16 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getStoredData, setStoredData } from '@/lib/data-store';
-import { TeachingLogItem } from '@/lib/types';
+import { TeachingLogItem, TermType } from '@/lib/types';
+import TermSwitcher from '@/components/TermSwitcher';
 import { formatThaiDate } from '@/lib/utils';
 import { FileText, Plus, Pencil, Trash2, ArrowLeft, Check, X } from 'lucide-react';
 
 export default function AdminTeachingLog() {
   const [logs, setLogs] = useState<TeachingLogItem[]>(() => getStoredData<TeachingLogItem[]>('teaching_log') || []);
+  const [currentTerm, setCurrentTerm] = useState<TermType>('term1');
   const [successMsg, setSuccessMsg] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<TeachingLogItem | null>(null);
   const [filterWeek, setFilterWeek] = useState<number | 'all'>('all');
+
+  // Mouse wheel scroll handler for admin week selector
+  const adminWeekScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleAdminWheel = (e: WheelEvent) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      if (adminWeekScrollRef.current) {
+        adminWeekScrollRef.current.scrollLeft += e.deltaY;
+      }
+    }
+  };
+
+  const setAdminWeekScrollRef = (node: HTMLDivElement | null) => {
+    if (adminWeekScrollRef.current) {
+      adminWeekScrollRef.current.removeEventListener('wheel', handleAdminWheel);
+    }
+    adminWeekScrollRef.current = node;
+    if (node) {
+      node.addEventListener('wheel', handleAdminWheel, { passive: false });
+    }
+  };
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -32,6 +56,7 @@ export default function AdminTeachingLog() {
   const handleAdd = () => {
     setEditingItem({
       id: 'log_' + Date.now(),
+      term: currentTerm,
       week: filterWeek === 'all' ? 1 : filterWeek,
       date: '',
       work: '',
@@ -43,6 +68,7 @@ export default function AdminTeachingLog() {
   const handleEdit = (item: TeachingLogItem) => {
     setEditingItem({ 
       ...item,
+      term: item.term || currentTerm,
       week: Number(item.week) || 1,
       work: item.work || item.topic || '',
       note: item.note || '',
@@ -64,6 +90,7 @@ export default function AdminTeachingLog() {
 
     const itemToSave: TeachingLogItem = {
       ...editingItem,
+      term: editingItem.term || currentTerm,
       week: Number(editingItem.week) || 1,
       date: editingItem.date || '',
       work: editingItem.work || editingItem.topic || '',
@@ -87,9 +114,10 @@ export default function AdminTeachingLog() {
     showNotification('บันทึกผลการปฏิบัติงานเรียบร้อยแล้ว!');
   };
 
+  const termLogs = logs.filter((l) => (l.term || 'term1') === currentTerm);
   const filteredLogs = filterWeek === 'all'
-    ? logs
-    : logs.filter((l) => Number(l.week) === Number(filterWeek));
+    ? termLogs
+    : termLogs.filter((l) => Number(l.week) === Number(filterWeek));
 
   return (
     <div className="space-y-6">
@@ -104,8 +132,8 @@ export default function AdminTeachingLog() {
               <span className="text-xs text-slate-300">/</span>
               <span className="text-xs font-semibold text-nantech-600">จัดการบันทึกการปฏิบัติงาน</span>
             </div>
-            <h1 className="text-xl font-bold text-slate-800">จัดการบันทึกการปฏิบัติงาน ({logs.length} รายการ)</h1>
-            <p className="text-xs text-slate-500 mt-0.5">บันทึกผลการปฏิบัติงานและการสอนรายวัน/รายสัปดาห์ (สัปดาห์ที่ 1 - 22)</p>
+            <h1 className="text-xl font-bold text-slate-800">จัดการบันทึกการปฏิบัติงาน</h1>
+            <p className="text-xs text-slate-500 mt-0.5">บันทึกผลการปฏิบัติงานและการสอนรายวัน/รายสัปดาห์</p>
           </div>
         </div>
 
@@ -134,28 +162,94 @@ export default function AdminTeachingLog() {
         </div>
       )}
 
-      {/* Filter by Week */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center space-x-2">
-          <span className="text-xs font-bold text-slate-700">กรองตามสัปดาห์:</span>
-          <select
-            value={filterWeek}
-            onChange={(e) => setFilterWeek(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-nantech-500"
-          >
-            <option value="all">ทุกสัปดาห์ ({logs.length} รายการ)</option>
-            {Array.from({ length: 22 }, (_, i) => i + 1).map((w) => {
-              const count = logs.filter((l) => Number(l.week) === w).length;
-              return (
-                <option key={w} value={w}>
-                  สัปดาห์ที่ {w} {count > 0 ? `(${count} รายการ)` : ''}
-                </option>
-              );
-            })}
-          </select>
+      {/* Filter by Term & Week */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-bold text-slate-700">สลับภาคเรียน:</span>
+            <TermSwitcher
+              currentTerm={currentTerm}
+              onTermChange={(t) => {
+                setCurrentTerm(t);
+                setFilterWeek('all');
+              }}
+            />
+          </div>
+          <div className="flex items-center space-x-3 flex-wrap">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-700">กรองสัปดาห์:</span>
+              <select
+                value={filterWeek}
+                onChange={(e) => setFilterWeek(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-nantech-500"
+              >
+                <option value="all">ทุกสัปดาห์ ({termLogs.length} รายการ)</option>
+                {Array.from({ length: 24 }, (_, i) => i + 1).map((w) => {
+                  const count = termLogs.filter((l) => Number(l.week) === w).length;
+                  return (
+                    <option key={w} value={w}>
+                      สัปดาห์ที่ {w} {count > 0 ? `(${count} รายการ)` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className="text-xs text-slate-500">
+              แสดง {filteredLogs.length} จาก {termLogs.length} รายการ ({currentTerm === 'term1' ? 'ภาคเรียนที่ 1' : 'ภาคเรียนที่ 2'})
+            </div>
+          </div>
         </div>
-        <div className="text-xs text-slate-500">
-          แสดง {filteredLogs.length} จากทั้งหมด {logs.length} รายการ
+
+        {/* Scrollable Week Pills with Mouse Wheel Support */}
+        <div
+          ref={setAdminWeekScrollRef}
+          className="flex items-center overflow-x-auto no-scrollbar space-x-1.5 py-1"
+        >
+          <button
+            onClick={() => setFilterWeek('all')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-xl shrink-0 transition-all border ${
+              filterWeek === 'all'
+                ? 'bg-nantech-600 text-white border-nantech-600 shadow-sm shadow-nantech-600/30'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <span>ทุกสัปดาห์</span>
+            <span
+              className={`ml-1.5 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filterWeek === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {termLogs.length}
+            </span>
+          </button>
+          {Array.from({ length: 24 }, (_, i) => i + 1).map((w) => {
+            const count = termLogs.filter((l) => Number(l.week) === w).length;
+            const isActive = filterWeek === w;
+            return (
+              <button
+                key={w}
+                onClick={() => setFilterWeek(w)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-xl shrink-0 transition-all flex items-center space-x-1 border ${
+                  isActive
+                    ? 'bg-nantech-600 text-white border-nantech-600 shadow-sm shadow-nantech-600/30'
+                    : count > 0
+                    ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>สัปดาห์ {w}</span>
+                {count > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-900'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -166,7 +260,7 @@ export default function AdminTeachingLog() {
             <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-sm">
               <tr>
                 <th className="px-6 py-4 w-16 text-center">ลำดับ</th>
-                <th className="px-6 py-4 w-28 text-center">สัปดาห์</th>
+                <th className="px-6 py-4 w-32 text-center">สัปดาห์ / ภาคเรียน</th>
                 <th className="px-6 py-4 w-32 text-center">วันที่</th>
                 <th className="px-6 py-4 text-left">การทำงาน</th>
                 <th className="px-6 py-4 w-36 text-center">หมายเหตุ</th>
@@ -177,7 +271,7 @@ export default function AdminTeachingLog() {
               {filteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-slate-400">
-                    ไม่พบบันทึกการปฏิบัติงานในสัปดาห์นี้
+                    ไม่พบบันทึกการปฏิบัติงานในสัปดาห์นี้ ({currentTerm === 'term1' ? 'ภาคเรียนที่ 1' : 'ภาคเรียนที่ 2'})
                   </td>
                 </tr>
               ) : (
@@ -185,9 +279,16 @@ export default function AdminTeachingLog() {
                   <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-5 font-semibold text-slate-400 text-center">{idx + 1}</td>
                     <td className="py-5 font-semibold text-center">
-                      <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
-                        สัปดาห์ที่ {item.week || 1}
-                      </span>
+                      <div className="flex flex-col items-center space-y-1">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                          สัปดาห์ที่ {item.week || 1}
+                        </span>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          (item.term || 'term1') === 'term2' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {(item.term || 'term1') === 'term2' ? 'ภาค 2' : 'ภาค 1'}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-5 font-semibold text-slate-700 text-center">{formatThaiDate(item.date)}</td>
                     <td className="px-6 py-5 font-medium text-slate-800 text-left leading-relaxed whitespace-pre-line">
@@ -232,15 +333,26 @@ export default function AdminTeachingLog() {
             </div>
 
             <form onSubmit={handleSaveModal} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">สัปดาห์ที่ (1 - 22)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">ภาคเรียน</label>
+                  <select
+                    value={editingItem.term || currentTerm}
+                    onChange={(e) => setEditingItem({ ...editingItem, term: e.target.value as TermType })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  >
+                    <option value="term1">ภาคเรียนที่ 1</option>
+                    <option value="term2">ภาคเรียนที่ 2</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">สัปดาห์ที่ (1 - 24)</label>
                   <select
                     value={editingItem.week || 1}
                     onChange={(e) => setEditingItem({ ...editingItem, week: Number(e.target.value) })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   >
-                    {Array.from({ length: 22 }, (_, i) => i + 1).map((w) => (
+                    {Array.from({ length: 24 }, (_, i) => i + 1).map((w) => (
                       <option key={w} value={w}>สัปดาห์ที่ {w}</option>
                     ))}
                   </select>

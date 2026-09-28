@@ -32,10 +32,10 @@ export default function SchedulePage() {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
         <div className="space-y-2">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-50 text-nantech-600 text-xs font-semibold">
+          {/* <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-50 text-nantech-600 text-xs font-semibold">
             <Calendar className="w-4 h-4" />
             <span>ตารางสอนประจำปีการศึกษา</span>
-          </div>
+          </div> */}
           <h1 className="text-3xl font-extrabold text-slate-800">ตารางสอนและรายวิชาที่รับผิดชอบ</h1>
           <p className="text-slate-500 text-sm">
             แสดงภาพตารางสอนและรายละเอียดรหัสวิชา รายวิชาที่รับผิดชอบการสอน ({termLabel})
